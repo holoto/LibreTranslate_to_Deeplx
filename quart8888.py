@@ -1,27 +1,21 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from quart import Quart, request, jsonify
 import httpx
 import asyncio
-import hypercorn.config
 import hypercorn.asyncio
+import hypercorn.config
 
-
-app = FastAPI()
+app = Quart(__name__)
 
 async def fetch_translation(client, url, payload):
     response = await client.post(url, json=payload)
-    response.raise_for_status()  # Raise exception for non-2xx status codes
+    response.raise_for_status()
     return response.json()
 
 @app.post("/translate")
-async def translate_text(request: Request):
-    try:
-        data = await request.json()
-    except JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid JSON data")
-    
+async def translate_text():
+    data = await request.get_json()
     if not data or not data.get('text') or not data.get('source_lang'):
-        raise HTTPException(status_code=400, detail="Bad Request")
+        return jsonify({'error': 'Bad Request'}), 400
 
     api_url = "http://127.0.0.1:5000/translate"
     api_key = ""
@@ -37,14 +31,11 @@ async def translate_text(request: Request):
     async with httpx.AsyncClient() as client:
         try:
             response = await fetch_translation(client, api_url, payload)
-            return JSONResponse({"data": response["translatedText"], "code": 200})
+            return jsonify({"data": response["translatedText"],"code":200})
         except httpx.RequestError as e:
-            return JSONResponse({'error': 'Internal Server Error'}, 500)
+            return jsonify({'error': 'Internal Server Error'}), 500
 
 if __name__ == "__main__":
     config = hypercorn.config.Config()
-    config.bind = ["0.0.0.0:6666"]
+    config.bind = ["0.0.0.0:8888"]
     asyncio.run(hypercorn.asyncio.serve(app, config))
-
-
-
